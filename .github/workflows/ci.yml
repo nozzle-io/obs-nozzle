@@ -1,0 +1,51 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Get OBS headers
+        run: |
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/obsproject/obs-studio.git /tmp/obs-studio
+          cd /tmp/obs-studio
+          git sparse-checkout set libobs
+
+      - name: Create obsconfig.h stub
+        run: echo '#pragma once' > /tmp/obs-studio/libobs/obsconfig.h
+
+      - name: Configure
+        run: cmake -B build -DOBS_INCLUDE_DIR=/tmp/obs-studio/libobs -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DNOZZLE_OBS_LINK_LIBRARY=OFF
+
+      - name: Build
+        run: cmake --build build
+
+  build-windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Get OBS headers
+        run: |
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/obsproject/obs-studio.git $env:RUNNER_TEMP\obs-studio
+          cd $env:RUNNER_TEMP\obs-studio
+          git sparse-checkout set libobs
+
+      - name: Create obsconfig.h stub
+        run: Set-Content -Path "$env:RUNNER_TEMP\obs-studio\libobs\obsconfig.h" -Value "#pragma once"
+
+      - name: Configure
+        run: cmake -B build -DOBS_INCLUDE_DIR="$env:RUNNER_TEMP\obs-studio\libobs" -DNOZZLE_OBS_LINK_LIBRARY=OFF
+
+      - name: Build
+        run: cmake --build build --config Debug

@@ -41,37 +41,41 @@ if(NOT OBS_INCLUDE_DIR OR NOT EXISTS "${OBS_INCLUDE_DIR}/obs.h")
 endif()
 
 # --- OBS library ---
-if(NOT DEFINED OBS_LIBRARY)
-    if(APPLE)
-        find_library(OBS_LIBRARY
-            NAMES obs.0 obs
-            PATHS
-                /opt/homebrew/lib
-                /usr/local/lib
-                "$ENV{HOME}/obs-studio/build/libobs"
-        )
-    elseif(UNIX)
-        find_library(OBS_LIBRARY
-            NAMES obs.0 obs
-            PATHS /usr/lib /usr/lib/x86_64-linux-gnu /usr/local/lib
-        )
-    elseif(WIN32)
-        find_library(OBS_LIBRARY
-            NAMES obs obs64
-            PATHS
-                "$ENV{OBS_STUDIO_DIR}"
-                "$ENV{OBS_STUDIO_DIR}/libobs"
-                "$ENV{PROGRAMFILES}/obs-studio/libobs"
+option(NOZZLE_OBS_LINK_LIBRARY "Link against OBS library (disable for header-only CI build)" ON)
+
+if(NOZZLE_OBS_LINK_LIBRARY)
+    if(NOT DEFINED OBS_LIBRARY)
+        if(APPLE)
+            find_library(OBS_LIBRARY
+                NAMES obs.0 obs
+                PATHS
+                    /opt/homebrew/lib
+                    /usr/local/lib
+                    "$ENV{HOME}/obs-studio/build/libobs"
+            )
+        elseif(UNIX)
+            find_library(OBS_LIBRARY
+                NAMES obs.0 obs
+                PATHS /usr/lib /usr/lib/x86_64-linux-gnu /usr/local/lib
+            )
+        elseif(WIN32)
+            find_library(OBS_LIBRARY
+                NAMES obs obs64
+                PATHS
+                    "$ENV{OBS_STUDIO_DIR}"
+                    "$ENV{OBS_STUDIO_DIR}/libobs"
+                    "$ENV{PROGRAMFILES}/obs-studio/libobs"
+            )
+        endif()
+    endif()
+
+    if(NOT OBS_LIBRARY)
+        message(FATAL_ERROR
+            "OBS Studio library not found. Set -DOBS_LIBRARY=<path-to-libobs>.\n"
+            "  On macOS: typically in /opt/homebrew/lib/libobs.0.dylib\n"
+            "  On Linux: typically in /usr/lib/x86_64-linux-gnu/libobs.so.0"
         )
     endif()
-endif()
-
-if(NOT OBS_LIBRARY)
-    message(FATAL_ERROR
-        "OBS Studio library not found. Set -DOBS_LIBRARY=<path-to-libobs>.\n"
-        "  On macOS: typically in /opt/homebrew/lib/libobs.0.dylib\n"
-        "  On Linux: typically in /usr/lib/x86_64-linux-gnu/libobs.so.0"
-    )
 endif()
 
 # --- Plugin shared library ---
@@ -90,7 +94,7 @@ target_sources(${PROJECT_NAME} PRIVATE
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     nozzle
-    ${OBS_LIBRARY}
+    $<$<BOOL:${NOZZLE_OBS_LINK_LIBRARY}>:${OBS_LIBRARY}>
 )
 
 # Disable exceptions (OBS plugin is C API, nozzle is no-exceptions)
