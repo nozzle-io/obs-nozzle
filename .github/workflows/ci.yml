@@ -18,6 +18,7 @@ jobs:
           git clone --depth 1 --filter=blob:none --sparse https://github.com/obsproject/obs-studio.git /tmp/obs-studio
           cd /tmp/obs-studio
           git sparse-checkout set libobs deps/simde
+          git submodule update --init --recursive deps/simde
 
       - name: Create obsconfig.h
         run: printf '#pragma once\n' > /tmp/obs-studio/libobs/obsconfig.h

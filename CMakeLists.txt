@@ -79,7 +79,11 @@ if(NOZZLE_OBS_LINK_LIBRARY)
 endif()
 
 # --- Plugin shared library ---
-add_library(${PROJECT_NAME} MODULE)
+if(NOZZLE_OBS_LINK_LIBRARY)
+    add_library(${PROJECT_NAME} MODULE)
+else()
+    add_library(${PROJECT_NAME} STATIC)
+endif()
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${OBS_INCLUDE_DIR}
