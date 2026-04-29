@@ -17,14 +17,14 @@ jobs:
         run: |
           git clone --depth 1 --filter=blob:none --sparse https://github.com/obsproject/obs-studio.git /tmp/obs-studio
           cd /tmp/obs-studio
-          git sparse-checkout set libobs deps/simde
-          git submodule update --init --recursive deps/simde
+          git sparse-checkout set libobs
+          git clone --depth 1 https://github.com/simd-everywhere/simde.git /tmp/simde
 
       - name: Create obsconfig.h
         run: printf '#pragma once\n' > /tmp/obs-studio/libobs/obsconfig.h
 
       - name: Configure
-        run: cmake -B build -DOBS_INCLUDE_DIR=/tmp/obs-studio/libobs -DOBS_DEPS_INCLUDE_DIR=/tmp/obs-studio/deps/simde -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DNOZZLE_OBS_LINK_LIBRARY=OFF
+        run: cmake -B build -DOBS_INCLUDE_DIR=/tmp/obs-studio/libobs -DOBS_DEPS_INCLUDE_DIR=/tmp/simde -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DNOZZLE_OBS_LINK_LIBRARY=OFF
 
       - name: Build
         run: cmake --build build
