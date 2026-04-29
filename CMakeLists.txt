@@ -84,8 +84,11 @@ add_library(${PROJECT_NAME} MODULE)
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${OBS_INCLUDE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/src
-    $<$<AND:<BOOL:${OBS_DEPS_INCLUDE_DIR}>,<EXISTS:${OBS_DEPS_INCLUDE_DIR}>>:${OBS_DEPS_INCLUDE_DIR}>
 )
+
+if(DEFINED OBS_DEPS_INCLUDE_DIR AND EXISTS "${OBS_DEPS_INCLUDE_DIR}")
+    target_include_directories(${PROJECT_NAME} PRIVATE ${OBS_DEPS_INCLUDE_DIR})
+endif()
 
 target_sources(${PROJECT_NAME} PRIVATE
     src/nozzle-plugin.cpp
