@@ -100,7 +100,7 @@ static void nozzle_source_update_texture(nozzle_source_context *ctx, NozzleFrame
     obs_enter_graphics();
     gs_texture_set_image(
         ctx->texture,
-        pixels.data,
+        (const uint8_t *)pixels.data,
         pixels.row_bytes,
         false);
     obs_leave_graphics();

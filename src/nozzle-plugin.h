@@ -1,7 +1,7 @@
 #pragma once
 
 #include <nozzle/nozzle_c.h>
-#include <obs.h>
+#include <obs-module.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -67,20 +67,20 @@ static inline uint32_t nozzle_pixel_size(NozzleTextureFormat format)
     }
 }
 
-static inline GSColorFormat nozzle_to_gs_format(NozzleTextureFormat format)
+static inline enum gs_color_format nozzle_to_gs_format(NozzleTextureFormat format)
 {
     switch (format) {
     case NOZZLE_FORMAT_RGBA8_UNORM:
     case NOZZLE_FORMAT_RGBA8_SRGB:
-        return GS_RGBA8;
+        return GS_RGBA;
     case NOZZLE_FORMAT_BGRA8_UNORM:
     case NOZZLE_FORMAT_BGRA8_SRGB:
-        return GS_BGRX8;
+        return GS_BGRX;
     case NOZZLE_FORMAT_R8_UNORM:
         return GS_R8;
     case NOZZLE_FORMAT_RG8_UNORM:
-        return GS_RG8;
+        return GS_R8G8;
     default:
-        return GS_RGBA8;
+        return GS_RGBA;
     }
 }
