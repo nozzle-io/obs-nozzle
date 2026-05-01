@@ -1,5 +1,8 @@
 # obs-nozzle
 
+> This codebase is currently in its AI-slob prototyping phase: the code runs on momentum, vibes, and plausible intent.
+> Proper debugging will be introduced once demand graduates from hypothetical to measurable.
+
 OBS Studio plugin providing [nozzle](https://github.com/nozzle-io/nozzle) GPU texture sharing as both source and output.
 
 ## What It Does
@@ -97,3 +100,7 @@ copy build\obs-nozzle.dll "%APPDATA%\obs-studio\plugins\obs-nozzle\obs-plugins\6
 ## License
 
 MIT
+
+Third-party dependencies:
+
+- [nozzle](https://github.com/nozzle-io/nozzle) — MIT
