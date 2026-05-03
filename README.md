@@ -5,6 +5,14 @@
 
 OBS Studio plugin providing [nozzle](https://github.com/nozzle-io/nozzle) GPU texture sharing as both source and output.
 
+## Disclaimer / Notice
+
+This library is currently a work in progress and contains many incomplete features and unverified implementations.
+Although it may appear usable at first glance, it may not function correctly.
+
+Please use it with the understanding that no guarantees are made regarding its behavior, and perform debugging, validation, and review as needed.
+If you encounter problems, please do not become angry; instead, contributions in the form of Issues or Pull Requests would be greatly appreciated.
+
 ## What It Does
 
 - **Nozzle Receiver (Source)** — Receive GPU textures from any nozzle sender and display them in OBS
