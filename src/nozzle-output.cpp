@@ -189,7 +189,7 @@ static void nozzle_output_raw_video(void *data, struct video_data *frame)
     }
 
     NozzleMappedPixels pixels{};
-    err = nozzle_frame_lock_writable_pixels(writable_frame, &pixels);
+    err = nozzle_frame_lock_writable_pixels_with_origin(writable_frame, NOZZLE_ORIGIN_TOP_LEFT, &pixels);
     if (err != NOZZLE_OK) {
         NZL_WARN("failed to lock writable pixels (error %d)", (int)err);
         nozzle_frame_release(writable_frame);
@@ -198,7 +198,7 @@ static void nozzle_output_raw_video(void *data, struct video_data *frame)
 
     uint32_t copy_height = pixels.height < ctx->height ? pixels.height : ctx->height;
     uint32_t src_row_bytes = ctx->width * 4;
-    uint32_t dst_row_bytes = pixels.row_bytes;
+    uint32_t dst_row_bytes = pixels.row_stride_bytes;
 
     if (src_row_bytes == dst_row_bytes) {
         memcpy(pixels.data, frame->data[0], src_row_bytes * copy_height);

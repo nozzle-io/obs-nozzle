@@ -91,7 +91,7 @@ static void nozzle_source_update_texture(nozzle_source_context *ctx, NozzleFrame
         return;
 
     NozzleMappedPixels pixels{};
-    NozzleErrorCode err = nozzle_frame_lock_pixels(frame, &pixels);
+    NozzleErrorCode err = nozzle_frame_lock_pixels_with_origin(frame, NOZZLE_ORIGIN_TOP_LEFT, &pixels);
     if (err != NOZZLE_OK) {
         NZL_WARN("failed to lock frame pixels (error %d)", (int)err);
         return;
@@ -101,7 +101,7 @@ static void nozzle_source_update_texture(nozzle_source_context *ctx, NozzleFrame
     gs_texture_set_image(
         ctx->texture,
         (const uint8_t *)pixels.data,
-        pixels.row_bytes,
+        pixels.row_stride_bytes,
         false);
     obs_leave_graphics();
 
