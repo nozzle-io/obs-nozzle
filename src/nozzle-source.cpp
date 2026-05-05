@@ -97,13 +97,34 @@ static void nozzle_source_update_texture(nozzle_source_context *ctx, NozzleFrame
         return;
     }
 
+    const uint8_t *image_data = (const uint8_t *)pixels.data;
+    uint32_t pixel_count = pixels.width * pixels.height;
+    uint32_t channels = (pixels.format == NOZZLE_FORMAT_RGBA32_UINT) ? 4 : 1;
+    uint32_t element_count = pixel_count * channels;
+
+    uint32_t *convert_buf = nullptr;
+
+    if (nozzle_needs_uint_to_float(pixels.format)) {
+        convert_buf = (uint32_t *)bmalloc(element_count * sizeof(float));
+        auto *src = (const uint32_t *)pixels.data;
+        auto *dst = (float *)convert_buf;
+        for (uint32_t i = 0; i < element_count; ++i) {
+            dst[i] = static_cast<float>(src[i]);
+        }
+        image_data = (const uint8_t *)convert_buf;
+    }
+
     obs_enter_graphics();
     gs_texture_set_image(
         ctx->texture,
-        (const uint8_t *)pixels.data,
+        image_data,
         pixels.row_stride_bytes,
         false);
     obs_leave_graphics();
+
+    if (convert_buf) {
+        bfree(convert_buf);
+    }
 
     nozzle_frame_unlock_pixels(frame);
 }

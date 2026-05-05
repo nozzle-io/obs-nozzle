@@ -86,3 +86,8 @@ static inline enum gs_color_format nozzle_to_gs_format(NozzleTextureFormat forma
     default:                          return GS_RGBA;
     }
 }
+
+static inline bool nozzle_needs_uint_to_float(NozzleTextureFormat format)
+{
+    return format == NOZZLE_FORMAT_R32_UINT || format == NOZZLE_FORMAT_RGBA32_UINT;
+}
