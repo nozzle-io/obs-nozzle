@@ -106,11 +106,12 @@ static void nozzle_source_update_texture(nozzle_source_context *ctx, NozzleFrame
 
     if (nozzle_needs_uint_to_float(pixels.format)) {
         convert_buf = (uint32_t *)bmalloc(element_count * sizeof(float));
-        auto *src = (const uint32_t *)pixels.data;
-        auto *dst = (float *)convert_buf;
-        for (uint32_t i = 0; i < element_count; ++i) {
-            dst[i] = static_cast<float>(src[i]);
-        }
+        uint32_t channels = (pixels.format == NOZZLE_FORMAT_RGBA32_UINT) ? 4 : 1;
+        nozzle_convert_uint32_to_float32(
+            pixels.data, convert_buf,
+            pixels.width, pixels.height,
+            pixels.row_stride_bytes, pixels.width * channels * sizeof(float),
+            channels);
         image_data = (const uint8_t *)convert_buf;
     }
 
