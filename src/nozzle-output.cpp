@@ -17,7 +17,8 @@ static bool nozzle_output_create_sender(nozzle_output_context *ctx)
     desc.name = ctx->sender_name[0] ? ctx->sender_name : "OBS Nozzle Output";
     desc.application_name = ctx->application_name[0] ? ctx->application_name : "OBS Studio";
     desc.ring_buffer_size = 3;
-    desc.allow_format_fallback = 1;
+    desc.fallback_flags_valid = 1;
+    desc.fallback_flags = NOZZLE_FALLBACK_SAFE_DEFAULTS;
 
     NozzleSender *sender = nullptr;
     NozzleErrorCode err = nozzle_sender_create(&desc, &sender);
