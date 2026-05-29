@@ -6,6 +6,18 @@
 #define NZL_OUTPUT_SENDER_NAME     "output_sender_name"
 #define NZL_OUTPUT_APPLICATION_NAME "output_application_name"
 
+namespace {
+
+struct nozzle_frame_guard {
+    NozzleFrame *frame{};
+    explicit nozzle_frame_guard(NozzleFrame *f) : frame(f) {}
+    ~nozzle_frame_guard() { if (frame) nozzle_frame_release(frame); }
+    nozzle_frame_guard(const nozzle_frame_guard &) = delete;
+    nozzle_frame_guard &operator=(const nozzle_frame_guard &) = delete;
+};
+
+} // namespace
+
 static bool nozzle_output_create_sender(nozzle_output_context *ctx)
 {
     if (ctx->sender) {
@@ -188,12 +200,13 @@ static void nozzle_output_raw_video(void *data, struct video_data *frame)
         NZL_WARN("failed to acquire writable frame (error %d)", (int)err);
         return;
     }
+    nozzle_frame_guard frame_guard{writable_frame};
 
     NozzleMappedPixels pixels{};
     err = nozzle_frame_lock_writable_pixels_with_origin(writable_frame, NOZZLE_ORIGIN_TOP_LEFT, &pixels);
     if (err != NOZZLE_OK) {
         NZL_WARN("failed to lock writable pixels (error %d)", (int)err);
-        nozzle_frame_release(writable_frame);
+        (void)nozzle_sender_discard_frame(ctx->sender, writable_frame);
         return;
     }
 
@@ -217,8 +230,7 @@ static void nozzle_output_raw_video(void *data, struct video_data *frame)
     err = nozzle_frame_unlock_writable_pixels_checked(writable_frame);
     if (err != NOZZLE_OK) {
         NZL_WARN("failed to unlock writable frame (error %d)", (int)err);
-        /* Commit rejects failed-unlock frames and releases the sender slot. */
-        (void)nozzle_sender_commit_frame(ctx->sender, writable_frame);
+        (void)nozzle_sender_discard_frame(ctx->sender, writable_frame);
         return;
     }
 
