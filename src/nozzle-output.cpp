@@ -214,7 +214,13 @@ static void nozzle_output_raw_video(void *data, struct video_data *frame)
         }
     }
 
-    nozzle_frame_unlock_writable_pixels(writable_frame);
+    err = nozzle_frame_unlock_writable_pixels_checked(writable_frame);
+    if (err != NOZZLE_OK) {
+        NZL_WARN("failed to unlock writable frame (error %d)", (int)err);
+        /* Commit rejects failed-unlock frames and releases the sender slot. */
+        (void)nozzle_sender_commit_frame(ctx->sender, writable_frame);
+        return;
+    }
 
     err = nozzle_sender_commit_frame(ctx->sender, writable_frame);
     if (err != NOZZLE_OK) {
