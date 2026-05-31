@@ -145,8 +145,11 @@ jobs:
           $dump = & dumpbin /exports $obsDll
           $exports = @()
           foreach ($line in $dump) {
-              if ($line -match '^\s*\d+\s+\S+\s+[0-9A-Fa-f]+\s+([A-Za-z_][A-Za-z0-9_@]*)\s*$') {
-                  $exports += $Matches[1]
+              $columns = $line.Trim() -split '\s+'
+              if ($columns.Count -ge 3 -and
+                  $columns[0] -match '^\d+$' -and
+                  $columns[-1] -match '^[A-Za-z_][A-Za-z0-9_@]*$') {
+                  $exports += $columns[-1]
               }
           }
           if ($exports.Count -lt 20) {
