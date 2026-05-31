@@ -148,7 +148,8 @@ jobs:
               $columns = $line.Trim() -split '\s+'
               if ($columns.Count -ge 3 -and
                   $columns[0] -match '^\d+$' -and
-                  $columns[-1] -match '^[A-Za-z_][A-Za-z0-9_@]*$') {
+                  $columns[-1] -match '^[A-Za-z_][A-Za-z0-9_@]*$' -and
+                  !$columns[-1].StartsWith('__')) {
                   $exports += $columns[-1]
               }
           }
