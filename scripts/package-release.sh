@@ -46,6 +46,9 @@ cp LICENSE "package/$package_root/LICENSE"
 file "package/$package_root/$binary_destination" | tee plugin-file.txt
 grep -F "Mach-O" plugin-file.txt
 grep -F "bundle" plugin-file.txt
+lipo -info "package/$package_root/$binary_destination" | tee plugin-lipo.txt
+grep -F "arm64" plugin-lipo.txt
+grep -F "x86_64" plugin-lipo.txt
 
 (
   cd package

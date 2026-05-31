@@ -82,9 +82,9 @@ old header/static check path. Release packages are produced for:
 
 The CI dependency source is OBS Studio `32.1.2` official release artifacts:
 
-- macOS links against `libobs.framework` from the official OBS macOS dmg
-  matching the runner architecture. The plugin output is `obs-nozzle.so`
-  (`Mach-O ... bundle`).
+- macOS links against a universal `libobs.framework` made from the official OBS
+  Apple and Intel macOS dmgs. The plugin output is `obs-nozzle.so`
+  (`Mach-O ... bundle`) and CI verifies both `arm64` and `x86_64` slices.
 - Windows links against an import library generated from `obs.dll` in the
   official OBS Windows x64 zip. The plugin output is `obs-nozzle.dll`
   (`PE/MZ` DLL).

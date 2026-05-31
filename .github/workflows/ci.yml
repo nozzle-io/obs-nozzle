@@ -41,21 +41,27 @@ jobs:
 
           git clone --depth 1 https://github.com/simd-everywhere/simde.git "$RUNNER_TEMP/simde"
 
-          arch="$(uname -m)"
-          if [ "$arch" = "arm64" ]; then
-            obs_dmg="OBS-Studio-${OBS_VERSION}-macOS-Apple.dmg"
-          else
-            obs_dmg="OBS-Studio-${OBS_VERSION}-macOS-Intel.dmg"
-          fi
-          curl -L -o "$RUNNER_TEMP/$obs_dmg" \
-            "https://github.com/obsproject/obs-studio/releases/download/${OBS_VERSION}/$obs_dmg"
-          hdiutil attach -nobrowse -readonly "$RUNNER_TEMP/$obs_dmg" > "$RUNNER_TEMP/obs-attach.txt"
-          mount_point="$(awk -F '\t' '/\/Volumes\// {print $NF; exit}' "$RUNNER_TEMP/obs-attach.txt")"
-          mkdir -p "$RUNNER_TEMP/obs-app"
-          cp -R "$mount_point/OBS.app" "$RUNNER_TEMP/obs-app/"
-          hdiutil detach "$mount_point"
-          test -d "$RUNNER_TEMP/obs-app/OBS.app/Contents/Frameworks/libobs.framework"
-          file "$RUNNER_TEMP/obs-app/OBS.app/Contents/Frameworks/libobs.framework/libobs"
+          for platform in Apple Intel; do
+            obs_dmg="OBS-Studio-${OBS_VERSION}-macOS-${platform}.dmg"
+            curl -L -o "$RUNNER_TEMP/$obs_dmg" \
+              "https://github.com/obsproject/obs-studio/releases/download/${OBS_VERSION}/$obs_dmg"
+            hdiutil attach -nobrowse -readonly "$RUNNER_TEMP/$obs_dmg" > "$RUNNER_TEMP/obs-${platform}-attach.txt"
+            mount_point="$(awk -F '\t' '/\/Volumes\// {print $NF; exit}' "$RUNNER_TEMP/obs-${platform}-attach.txt")"
+            cp -R "$mount_point/OBS.app/Contents/Frameworks/libobs.framework" \
+              "$RUNNER_TEMP/libobs-${platform}.framework"
+            hdiutil detach "$mount_point"
+          done
+
+          mkdir -p "$RUNNER_TEMP/obs-universal"
+          cp -R "$RUNNER_TEMP/libobs-Apple.framework" "$RUNNER_TEMP/obs-universal/libobs.framework"
+          lipo -create \
+            "$RUNNER_TEMP/libobs-Apple.framework/Versions/A/libobs" \
+            "$RUNNER_TEMP/libobs-Intel.framework/Versions/A/libobs" \
+            -output "$RUNNER_TEMP/obs-universal/libobs.framework/Versions/A/libobs"
+          file "$RUNNER_TEMP/obs-universal/libobs.framework/libobs"
+          lipo -info "$RUNNER_TEMP/obs-universal/libobs.framework/libobs" | tee "$RUNNER_TEMP/libobs-lipo.txt"
+          grep -F "arm64" "$RUNNER_TEMP/libobs-lipo.txt"
+          grep -F "x86_64" "$RUNNER_TEMP/libobs-lipo.txt"
 
       - name: Configure
         run: |
@@ -64,7 +70,8 @@ jobs:
             -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 \
             -DOBS_INCLUDE_DIR="$RUNNER_TEMP/obs-source/libobs" \
             -DOBS_DEPS_INCLUDE_DIR="$RUNNER_TEMP/simde" \
-            -DOBS_LIBRARY="$RUNNER_TEMP/obs-app/OBS.app/Contents/Frameworks/libobs.framework" \
+            -DOBS_LIBRARY="$RUNNER_TEMP/obs-universal/libobs.framework" \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
             -DNOZZLE_OBS_LINK_LIBRARY=ON
 
       - name: Build loadable plugin
@@ -78,6 +85,9 @@ jobs:
           file "$plugin" | tee plugin-file.txt
           grep -F "Mach-O" plugin-file.txt
           grep -F "bundle" plugin-file.txt
+          lipo -info "$plugin" | tee plugin-lipo.txt
+          grep -F "arm64" plugin-lipo.txt
+          grep -F "x86_64" plugin-lipo.txt
 
       - name: Prepare package metadata
         id: meta
@@ -275,6 +285,11 @@ jobs:
             unzip -q "$package" -d verify-package
             file "verify-package/$binary_path" | tee "${package}.file.txt"
             grep -F "$binary_kind" "${package}.file.txt"
+            if [[ "$base" == *-macos ]]; then
+              lipo -info "verify-package/$binary_path" | tee "${package}.lipo.txt"
+              grep -F "arm64" "${package}.lipo.txt"
+              grep -F "x86_64" "${package}.lipo.txt"
+            fi
             printf '%s\n' "$package" >> packages.txt
           done
 
