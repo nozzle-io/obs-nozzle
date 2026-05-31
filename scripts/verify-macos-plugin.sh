@@ -3,6 +3,8 @@ set -euo pipefail
 
 sanitize=0
 allow_build_rpath=0
+sign_adhoc=0
+require_adhoc_signature=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --sanitize)
@@ -13,6 +15,14 @@ while [ "$#" -gt 0 ]; do
       allow_build_rpath=1
       shift
       ;;
+    --sign-adhoc)
+      sign_adhoc=1
+      shift
+      ;;
+    --require-adhoc-signature)
+      require_adhoc_signature=1
+      shift
+      ;;
     *)
       break
       ;;
@@ -20,7 +30,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "$#" -ne 1 ]; then
-  echo "usage: scripts/verify-macos-plugin.sh [--sanitize] [--allow-build-rpath] PLUGIN_BINARY" >&2
+  echo "usage: scripts/verify-macos-plugin.sh [--sanitize] [--allow-build-rpath] [--sign-adhoc] [--require-adhoc-signature] PLUGIN_BINARY" >&2
   exit 2
 fi
 
@@ -79,4 +89,22 @@ if grep -E '(^/|obs-universal|runner/work|RUNNER_TEMP)' plugin-rpaths.txt; then
     echo "macOS plugin contains release-invalid LC_RPATH entries" >&2
     exit 1
   fi
+fi
+
+if [ "$sign_adhoc" -eq 1 ]; then
+  echo "Signing macOS plugin ad-hoc after post-link/package mutation"
+  codesign --force --sign - "$plugin_path"
+fi
+
+if [ "$require_adhoc_signature" -eq 1 ]; then
+  echo "Verifying macOS plugin code signature with codesign --verify --verbose=4"
+  codesign --verify --verbose=4 "$plugin_path" 2>&1 | tee plugin-codesign-verify.txt
+
+  echo "Trying strict macOS code signature verification"
+  codesign --verify --strict --verbose=4 "$plugin_path" 2>&1 | tee plugin-codesign-strict-verify.txt
+
+  echo "Classifying macOS plugin code signature with codesign -dv"
+  codesign -dv --verbose=4 "$plugin_path" 2>&1 | tee plugin-codesign-details.txt
+  grep -F "Signature=adhoc" plugin-codesign-details.txt
+  grep -F "TeamIdentifier=not set" plugin-codesign-details.txt
 fi

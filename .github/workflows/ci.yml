@@ -283,7 +283,7 @@ jobs:
             file "verify-package/$binary_path" | tee "${package}.file.txt"
             grep -F "$binary_kind" "${package}.file.txt"
             if [[ "$base" == *-macos ]]; then
-              scripts/verify-macos-plugin.sh "verify-package/$binary_path"
+              scripts/verify-macos-plugin.sh --require-adhoc-signature "verify-package/$binary_path"
             fi
             printf '%s\n' "$package" >> packages.txt
           done

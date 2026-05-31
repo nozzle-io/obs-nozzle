@@ -34,7 +34,7 @@ if [ ! -f "$data_path" ]; then
   exit 1
 fi
 
-rm -rf package "$package_name" package-contents.txt plugin-file.txt plugin-lipo.txt plugin-otool-l.txt plugin-load-commands.txt plugin-rpaths.txt
+rm -rf package "$package_name" package-contents.txt plugin-file.txt plugin-lipo.txt plugin-otool-l.txt plugin-load-commands.txt plugin-rpaths.txt plugin-codesign-verify.txt plugin-codesign-strict-verify.txt plugin-codesign-details.txt
 mkdir -p "package/$package_root/$(dirname "$binary_destination")"
 mkdir -p "package/$package_root/share/obs-plugins/obs-nozzle/locale"
 
@@ -43,7 +43,11 @@ cp "$data_path" "package/$package_root/share/obs-plugins/obs-nozzle/locale/en-US
 cp README.md "package/$package_root/README.md"
 cp LICENSE "package/$package_root/LICENSE"
 
-scripts/verify-macos-plugin.sh --sanitize "package/$package_root/$binary_destination"
+scripts/verify-macos-plugin.sh \
+  --sanitize \
+  --sign-adhoc \
+  --require-adhoc-signature \
+  "package/$package_root/$binary_destination"
 
 (
   cd package
