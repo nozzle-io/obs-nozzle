@@ -1,5 +1,8 @@
 #include "nozzle-plugin.h"
 
+obs_source_info create_nozzle_source_info();
+obs_output_info create_nozzle_output_info();
+
 extern "C" {
 
 OBS_DECLARE_MODULE()
@@ -8,9 +11,6 @@ OBS_MODULE_USE_DEFAULT_LOCALE("obs-nozzle", "en-US")
 
 obs_source_info nozzle_source_info;
 obs_output_info nozzle_output_info;
-
-extern obs_source_info create_nozzle_source_info();
-extern obs_output_info create_nozzle_output_info();
 
 bool obs_module_load(void)
 {

@@ -1,13 +1,22 @@
 name: CI
+
 on:
   push:
     branches: [main, stable]
+    tags: ['v*']
   pull_request:
     branches: [main, stable]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref_type != 'tag' && github.event_name != 'release' }}
+
+env:
+  OBS_VERSION: 32.1.2
 
 jobs:
   build-macos:
@@ -17,21 +26,91 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Get OBS headers and simde
+      - name: Get OBS sources, libobs, and simde
         run: |
-          git clone --depth 1 --filter=blob:none --sparse https://github.com/obsproject/obs-studio.git /tmp/obs-studio
-          cd /tmp/obs-studio
-          git sparse-checkout set libobs
-          git clone --depth 1 https://github.com/simd-everywhere/simde.git /tmp/simde
+          set -euo pipefail
+          obs_sources="OBS-Studio-${OBS_VERSION}-Sources.tar.gz"
+          curl -L -o "$RUNNER_TEMP/$obs_sources" \
+            "https://github.com/obsproject/obs-studio/releases/download/${OBS_VERSION}/$obs_sources"
+          mkdir -p "$RUNNER_TEMP/obs-source"
+          tar -xzf "$RUNNER_TEMP/$obs_sources" \
+            -C "$RUNNER_TEMP/obs-source" \
+            --strip-components=1 \
+            "obs-studio-${OBS_VERSION}-sources/libobs"
+          printf '#pragma once\n' > "$RUNNER_TEMP/obs-source/libobs/obsconfig.h"
 
-      - name: Create obsconfig.h
-        run: printf '#pragma once\n' > /tmp/obs-studio/libobs/obsconfig.h
+          git clone --depth 1 https://github.com/simd-everywhere/simde.git "$RUNNER_TEMP/simde"
+
+          arch="$(uname -m)"
+          if [ "$arch" = "arm64" ]; then
+            obs_dmg="OBS-Studio-${OBS_VERSION}-macOS-Apple.dmg"
+          else
+            obs_dmg="OBS-Studio-${OBS_VERSION}-macOS-Intel.dmg"
+          fi
+          curl -L -o "$RUNNER_TEMP/$obs_dmg" \
+            "https://github.com/obsproject/obs-studio/releases/download/${OBS_VERSION}/$obs_dmg"
+          hdiutil attach -nobrowse -readonly "$RUNNER_TEMP/$obs_dmg" > "$RUNNER_TEMP/obs-attach.txt"
+          mount_point="$(awk -F '\t' '/\/Volumes\// {print $NF; exit}' "$RUNNER_TEMP/obs-attach.txt")"
+          mkdir -p "$RUNNER_TEMP/obs-app"
+          cp -R "$mount_point/OBS.app" "$RUNNER_TEMP/obs-app/"
+          hdiutil detach "$mount_point"
+          test -d "$RUNNER_TEMP/obs-app/OBS.app/Contents/Frameworks/libobs.framework"
+          file "$RUNNER_TEMP/obs-app/OBS.app/Contents/Frameworks/libobs.framework/libobs"
 
       - name: Configure
-        run: cmake -B build -DOBS_INCLUDE_DIR=/tmp/obs-studio/libobs -DOBS_DEPS_INCLUDE_DIR=/tmp/simde -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DNOZZLE_OBS_LINK_LIBRARY=OFF
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 \
+            -DOBS_INCLUDE_DIR="$RUNNER_TEMP/obs-source/libobs" \
+            -DOBS_DEPS_INCLUDE_DIR="$RUNNER_TEMP/simde" \
+            -DOBS_LIBRARY="$RUNNER_TEMP/obs-app/OBS.app/Contents/Frameworks/libobs.framework" \
+            -DNOZZLE_OBS_LINK_LIBRARY=ON
 
-      - name: Build
-        run: cmake --build build
+      - name: Build loadable plugin
+        run: cmake --build build --config RelWithDebInfo
+
+      - name: Verify loadable plugin binary
+        run: |
+          set -euo pipefail
+          plugin="$(find build -type f -name 'obs-nozzle.so' | sort | head -n 1)"
+          test -n "$plugin"
+          file "$plugin" | tee plugin-file.txt
+          grep -F "Mach-O" plugin-file.txt
+          grep -F "bundle" plugin-file.txt
+
+      - name: Prepare package metadata
+        id: meta
+        shell: bash
+        run: |
+          repo="${{ github.event.repository.name }}"
+          short_sha="${GITHUB_SHA::7}"
+          platform="macos"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            base="${repo}-${GITHUB_REF_NAME}-${platform}"
+          elif [[ "${GITHUB_REF}" == refs/heads/main ]]; then
+            base="${repo}-latest-${short_sha}-${platform}"
+          elif [[ "${GITHUB_REF}" == refs/heads/stable ]]; then
+            base="${repo}-stable-${short_sha}-${platform}"
+          else
+            base="${repo}-ci-${short_sha}-${platform}"
+          fi
+          echo "package_root=${base}" >> "$GITHUB_OUTPUT"
+          echo "package_name=${base}.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Package release zip
+        run: |
+          scripts/package-release.sh \
+            macos \
+            "${{ steps.meta.outputs.package_name }}" \
+            "${{ steps.meta.outputs.package_root }}" \
+            build
+
+      - name: Upload release package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.package_root }}
+          path: ${{ steps.meta.outputs.package_name }}
 
   build-windows:
     runs-on: windows-2022
@@ -40,21 +119,214 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Get OBS headers
-        shell: bash
-        run: |
-          git clone --depth 1 --filter=blob:none --sparse https://github.com/obsproject/obs-studio.git "$RUNNER_TEMP/obs-studio"
-          cd "$RUNNER_TEMP/obs-studio"
-          git sparse-checkout set libobs
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
 
-      - name: Create obsconfig.h
-        shell: bash
-        run: printf '#pragma once\n' > "$RUNNER_TEMP/obs-studio/libobs/obsconfig.h"
+      - name: Get OBS sources and libobs import library
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $obsSources = "OBS-Studio-$env:OBS_VERSION-Sources.tar.gz"
+          curl.exe -L -o "$env:RUNNER_TEMP/$obsSources" "https://github.com/obsproject/obs-studio/releases/download/$env:OBS_VERSION/$obsSources"
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP/obs-source" | Out-Null
+          tar -xzf "$env:RUNNER_TEMP/$obsSources" -C "$env:RUNNER_TEMP/obs-source" --strip-components=1 "obs-studio-$env:OBS_VERSION-sources/libobs"
+          Set-Content -Path "$env:RUNNER_TEMP/obs-source/libobs/obsconfig.h" -Value '#pragma once'
+
+          $obsZip = "OBS-Studio-$env:OBS_VERSION-Windows-x64.zip"
+          curl.exe -L -o "$env:RUNNER_TEMP/$obsZip" "https://github.com/obsproject/obs-studio/releases/download/$env:OBS_VERSION/$obsZip"
+          Expand-Archive -Path "$env:RUNNER_TEMP/$obsZip" -DestinationPath "$env:RUNNER_TEMP/obs-windows"
+          $obsDll = "$env:RUNNER_TEMP/obs-windows/bin/64bit/obs.dll"
+          if (!(Test-Path -LiteralPath $obsDll -PathType Leaf)) {
+              throw "missing OBS DLL: $obsDll"
+          }
+
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP/obs-import" | Out-Null
+          $dump = & dumpbin /exports $obsDll
+          $exports = @()
+          foreach ($line in $dump) {
+              if ($line -match '^\s+\d+\s+[0-9A-Fa-f]+\s+[0-9A-Fa-f]+\s+([A-Za-z_][A-Za-z0-9_@]*)\s*$') {
+                  $exports += $Matches[1]
+              }
+          }
+          if ($exports.Count -lt 20) {
+              throw "too few obs.dll exports parsed: $($exports.Count)"
+          }
+          @('LIBRARY obs.dll', 'EXPORTS') + $exports | Set-Content -Path "$env:RUNNER_TEMP/obs-import/obs.def"
+          & lib /nologo /machine:x64 /def:"$env:RUNNER_TEMP/obs-import/obs.def" /out:"$env:RUNNER_TEMP/obs-import/obs.lib"
+          if (!(Test-Path -LiteralPath "$env:RUNNER_TEMP/obs-import/obs.lib" -PathType Leaf)) {
+              throw 'failed to create obs.lib import library'
+          }
 
       - name: Configure
-        shell: bash
-        run: cmake -B build -DOBS_INCLUDE_DIR="$RUNNER_TEMP/obs-studio/libobs" -DNOZZLE_OBS_LINK_LIBRARY=OFF
+        shell: pwsh
+        run: |
+          cmake -B build `
+            -DOBS_INCLUDE_DIR="$env:RUNNER_TEMP/obs-source/libobs" `
+            -DOBS_LIBRARY="$env:RUNNER_TEMP/obs-import/obs.lib" `
+            -DNOZZLE_OBS_LINK_LIBRARY=ON
 
-      - name: Build
+      - name: Build loadable plugin
+        shell: pwsh
+        run: cmake --build build --config RelWithDebInfo
+
+      - name: Verify loadable plugin binary
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $plugin = Get-ChildItem -Path build -Recurse -File -Filter 'obs-nozzle.dll' |
+            Sort-Object -Property FullName |
+            Select-Object -First 1
+          if ($null -eq $plugin) {
+              throw 'missing obs-nozzle.dll'
+          }
+          $bytes = [System.IO.File]::ReadAllBytes($plugin.FullName)
+          if ($bytes.Length -lt 2 -or $bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) {
+              throw "not a PE/MZ binary: $($plugin.FullName)"
+          }
+          & dumpbin /headers $plugin.FullName | Tee-Object -FilePath plugin-headers.txt
+          Select-String -Path plugin-headers.txt -Pattern 'DLL' | Select-Object -First 1
+
+      - name: Prepare package metadata
+        id: meta
         shell: bash
-        run: cmake --build build --config Debug
+        run: |
+          repo="${{ github.event.repository.name }}"
+          short_sha="${GITHUB_SHA::7}"
+          platform="windows"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            base="${repo}-${GITHUB_REF_NAME}-${platform}"
+          elif [[ "${GITHUB_REF}" == refs/heads/main ]]; then
+            base="${repo}-latest-${short_sha}-${platform}"
+          elif [[ "${GITHUB_REF}" == refs/heads/stable ]]; then
+            base="${repo}-stable-${short_sha}-${platform}"
+          else
+            base="${repo}-ci-${short_sha}-${platform}"
+          fi
+          echo "package_root=${base}" >> "$GITHUB_OUTPUT"
+          echo "package_name=${base}.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Package release zip
+        shell: pwsh
+        run: |
+          ./scripts/package-release-windows.ps1 `
+            -Platform windows `
+            -PackageName "${{ steps.meta.outputs.package_name }}" `
+            -PackageRoot "${{ steps.meta.outputs.package_root }}" `
+            -BuildDir build
+
+      - name: Upload release package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.package_root }}
+          path: ${{ steps.meta.outputs.package_name }}
+
+  release:
+    needs: [build-macos, build-windows]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Verify downloaded packages
+        run: |
+          set -euo pipefail
+          packages=()
+          while IFS= read -r package; do
+            packages+=("$package")
+          done < <(find release-artifacts -type f -name '*.zip' | sort)
+
+          if [ "${#packages[@]}" -ne 2 ]; then
+            printf 'expected 2 release zips, found %s\n' "${#packages[@]}" >&2
+            printf '%s\n' "${packages[@]}"
+            exit 1
+          fi
+
+          for package in "${packages[@]}"; do
+            base="$(basename "$package" .zip)"
+            case "$base" in
+              *-macos)
+                binary_path="${base}/lib/obs-plugins/obs-nozzle/obs-nozzle.so"
+                binary_kind="Mach-O"
+                ;;
+              *-windows)
+                binary_path="${base}/bin/obs-plugins/obs-nozzle/obs-nozzle.dll"
+                binary_kind="PE32"
+                ;;
+              *) echo "unknown package platform: $base" >&2; exit 1 ;;
+            esac
+
+            unzip -l "$package" > "${package}.contents.txt"
+            grep -F "$binary_path" "${package}.contents.txt"
+            grep -F "${base}/share/obs-plugins/obs-nozzle/locale/en-US.ini" "${package}.contents.txt"
+            grep -F "${base}/README.md" "${package}.contents.txt"
+            grep -F "${base}/LICENSE" "${package}.contents.txt"
+
+            rm -rf verify-package
+            mkdir -p verify-package
+            unzip -q "$package" -d verify-package
+            file "verify-package/$binary_path" | tee "${package}.file.txt"
+            grep -F "$binary_kind" "${package}.file.txt"
+            printf '%s\n' "$package" >> packages.txt
+          done
+
+      - name: Delete old latest release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view latest --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release delete latest --yes --repo "${GITHUB_REPOSITORY}"
+          else
+            echo "No existing latest release to delete"
+          fi
+
+      - name: Check versioned release asset does not exist
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --json assets --jq '.assets[].name' > existing-assets.txt 2>/dev/null; then
+            while IFS= read -r package; do
+              asset="$(basename "$package")"
+              if grep -Fx "$asset" existing-assets.txt; then
+                echo "versioned release asset already exists: $asset" >&2
+                exit 1
+              fi
+            done < packages.txt
+          else
+            echo "No existing release for ${GITHUB_REF_NAME}; create step will create it."
+          fi
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          packages=()
+          while IFS= read -r package; do
+            packages+=("$package")
+          done < packages.txt
+
+          if [[ "${GITHUB_REF}" == refs/heads/main ]]; then
+            gh release create latest "${packages[@]}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "Latest development snapshot" \
+              --prerelease \
+              --notes "Development snapshot from main. Commit: ${GITHUB_SHA}"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+              gh release upload "${GITHUB_REF_NAME}" "${packages[@]}" --repo "${GITHUB_REPOSITORY}"
+            else
+              gh release create "${GITHUB_REF_NAME}" "${packages[@]}" \
+                --repo "${GITHUB_REPOSITORY}" \
+                --title "${GITHUB_REF_NAME}" \
+                --notes "Release ${GITHUB_REF_NAME}"
+            fi
+          else
+            echo "unsupported release ref: ${GITHUB_REF}" >&2
+            exit 1
+          fi

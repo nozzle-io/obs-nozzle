@@ -70,24 +70,46 @@ export OBS_STUDIO_DIR=/path/to/obs-studio
 cmake -B build
 ```
 
-## Installation
+## Release packages
 
-Copy the built plugin to OBS plugins directory:
+CI builds real loadable OBS plugin modules for the release targets instead of the
+old header/static check path. Release packages are produced for:
 
-**macOS:**
-```bash
-cp -r build/obs-nozzle.so ~/Library/Application\ Support/obs-studio/plugins/obs-nozzle.plugin/
+- `obs-nozzle-latest-<short_sha>-macos.zip`
+- `obs-nozzle-latest-<short_sha>-windows.zip`
+- `obs-nozzle-vX.Y.Z-macos.zip`
+- `obs-nozzle-vX.Y.Z-windows.zip`
+
+The CI dependency source is OBS Studio `32.1.2` official release artifacts:
+
+- macOS links against `libobs.framework` from the official OBS macOS dmg
+  matching the runner architecture. The plugin output is `obs-nozzle.so`
+  (`Mach-O ... bundle`).
+- Windows links against an import library generated from `obs.dll` in the
+  official OBS Windows x64 zip. The plugin output is `obs-nozzle.dll`
+  (`PE/MZ` DLL).
+- Both platforms use `libobs` headers from the official
+  `OBS-Studio-32.1.2-Sources.tar.gz` source release.
+
+Package layout is a prefix-style OBS plugin layout with one top-level package
+folder:
+
+```text
+obs-nozzle-<channel>-<platform>/
+  README.md
+  LICENSE
+  lib/obs-plugins/obs-nozzle/obs-nozzle.so        # macOS
+  bin/obs-plugins/obs-nozzle/obs-nozzle.dll       # Windows
+  share/obs-plugins/obs-nozzle/locale/en-US.ini
 ```
 
-**Linux:**
-```bash
-cp build/obs-nozzle.so ~/.config/obs-studio/plugins/obs-nozzle/bin/64bit/
-```
+Copy the platform-specific plugin binary and `share/obs-plugins/obs-nozzle`
+locale directory into the matching OBS plugin prefix for your installation.
 
-**Windows:**
-```bash
-copy build\obs-nozzle.dll "%APPDATA%\obs-studio\plugins\obs-nozzle\obs-plugins\64bit\"
-```
+## Installation from local build
+
+Build with `NOZZLE_OBS_LINK_LIBRARY=ON` and a real `OBS_LIBRARY` path. Then copy
+the built module and `data/locale/en-US.ini` into the same layout shown above.
 
 ## Usage
 
