@@ -85,6 +85,8 @@ The CI dependency source is OBS Studio `32.1.2` official release artifacts:
 - macOS links against a universal `libobs.framework` made from the official OBS
   Apple and Intel macOS dmgs. The plugin output is `obs-nozzle.so`
   (`Mach-O ... bundle`) and CI verifies both `arm64` and `x86_64` slices.
+  Release packaging removes build-local `LC_RPATH` entries and verifies the
+  final zip does not contain absolute CI/build paths.
 - Windows links against an import library generated from `obs.dll` in the
   official OBS Windows x64 zip. The plugin output is `obs-nozzle.dll`
   (`PE/MZ` DLL).
