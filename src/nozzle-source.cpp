@@ -48,9 +48,9 @@ static bool nozzle_source_try_connect(nozzle_source_context *ctx)
 
     ctx->receiver = receiver;
 
-    NozzleConnectedSenderInfo info{};
-    err = nozzle_receiver_get_connected_info(receiver, &info);
-    if (err != NOZZLE_OK) {
+    NozzleConnectedSenderSnapshot info{};
+    err = nozzle_receiver_get_connected_info_snapshot(receiver, &info);
+    if (err != NOZZLE_OK || info.connected == 0) {
         NZL_WARN("receiver created but not connected to '%s'", ctx->sender_name);
         ctx->connected = false;
         ctx->initialized = false;

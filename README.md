@@ -124,6 +124,16 @@ the built module and `data/locale/en-US.ini` into the same layout shown above.
 3. Choose a sender from the dropdown (or type a sender name)
 4. Adjust timeout if needed (default: 100ms)
 
+Connection setup copies a complete owned receiver snapshot and marks the source
+connected/initialized only when the getter succeeds and its connection flag is
+nonzero. A false flag keeps the existing retry path. This is last-observed state,
+not a fresh liveness guarantee or a new thread-safety contract; sender-closed
+acquisition teardown and frame/texture lifetimes are unchanged.
+
+CI builds and packages macOS universal and Windows x64 modules and checks binary
+properties. It does not launch OBS or validate receiver connection, reconnect,
+or rendering behavior at runtime; there is no Linux CI job.
+
 ### Nozzle Sender (Output)
 
 1. Go to Settings → Output
